@@ -76,9 +76,9 @@ class UserBase(BaseModel):
     email: EmailStr
     username: str
 
-class UserCreate(UserBase):
+class UserCreate(BaseModel):
+    email: EmailStr
     password: str
-    birthYear: int
     agreeTerms: bool
 
 class UserLogin(BaseModel):
@@ -155,19 +155,11 @@ async def root():
 
 @app.post("/api/auth/register", response_model=Token)
 async def register(user: UserCreate):
-    # Check if user already exists
-    if user.email in users_db or user.username in users_db:
+    # Check if user already exists by email
+    if user.email in users_db:
         raise HTTPException(
             status_code=400,
-            detail="User with this email or username already exists"
-        )
-    
-    # Validate age (must be 18+)
-    current_year = datetime.now().year
-    if current_year - user.birthYear < 18:
-        raise HTTPException(
-            status_code=400,
-            detail="Must be 18 or older to register"
+            detail="User with this email already exists"
         )
     
     # Validate terms agreement
@@ -177,26 +169,34 @@ async def register(user: UserCreate):
             detail="Must agree to terms and conditions"
         )
     
+    # Generate a unique username based on email
+    username_base = user.email.split('@')[0]
+    username = username_base
+    counter = 1
+    while username in users_db:
+        username = f"{username_base}{counter}"
+        counter += 1
+    
     # Create new user
     hashed_password = get_password_hash(user.password)
     user_id = len(users_db) + 1
     new_user = {
         "id": user_id,
         "email": user.email,
-        "username": user.username,
+        "username": username,
         "hashed_password": hashed_password,
         "gemBalance": 100,  # Welcome bonus
         "isActive": True
     }
     
     # Store user (using username as key for simplicity)
-    users_db[user.username] = new_user
+    users_db[username] = new_user
     users_db[user.email] = new_user  # Allow login with email too
     
     # Create access token
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.username}, expires_delta=access_token_expires
+        data={"sub": username}, expires_delta=access_token_expires
     )
     
     user_response = User(
