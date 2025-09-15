@@ -1,0 +1,54 @@
+# Azure Developer CLI configuration
+# Project-level settings for naughty-chats
+
+name: naughty-chats
+metadata:
+  template: custom
+services:
+  api:
+    project: ./backend
+    language: python
+    host: containerapp
+    docker:
+      path: ./backend/Dockerfile
+    env:
+      # Populated after infra deploy
+      COSMOS_DATABASE: nchatsdb
+      COSMOS_USERS_CONTAINER: users
+      COSMOS_CHARACTERS_CONTAINER: characters
+      COSMOS_AUTO_PROVISION: "false"
+      # Auth settings (must be set via azd env set)
+      ENTRA_API_AUDIENCE: ""
+      ENTRA_TENANT_ID: ""
+      ENTRA_B2C_POLICY: ""
+      ENTRA_B2C_TENANT_PRIMARY_DOMAIN: ""
+  web:
+    project: ./frontend
+    language: js
+    host: containerapp
+    docker:
+      path: ./frontend/Dockerfile
+    env:
+      NEXT_PUBLIC_ENTRA_CLIENT_ID: ""
+      NEXT_PUBLIC_ENTRA_API_SCOPE: ""
+      NEXT_PUBLIC_ENTRA_TENANT_ID: ""
+      NEXT_PUBLIC_B2C_TENANT_NAME: ""
+      NEXT_PUBLIC_B2C_USER_FLOW: ""
+      # NEXT_PUBLIC_API_BASE_URL will be injected from infra output
+
+# Infra defined in infra/main.bicep
+infra:
+  provider: bicep
+  path: infra/main.bicep
+  parameters:
+    # Required parameters; set via azd env set or managed in an environment file
+    prefix: "nchat"
+    environment: "dev"
+    acrName: "" # supply a globally unique ACR name (no dashes)
+    entraApiAudience: "" # e.g. api://YOUR_API_APP_ID
+    entraTenantId: "" # Entra tenant (GUID)
+    spaClientId: "" # Frontend app registration client id
+    spaApiScope: "" # e.g. api://YOUR_API_APP_ID/.default
+    allowedOrigins: "http://localhost:3000"
+    entraB2cPolicy: "" # optional
+    entraB2cPrimaryDomain: "" # optional e.g. yourtenant.onmicrosoft.com

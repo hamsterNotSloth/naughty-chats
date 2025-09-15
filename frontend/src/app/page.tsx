@@ -28,13 +28,18 @@ export default function HomePage() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'fast_load' | 'popular' | 'new'>('popular');
 
-  const { data, isLoading, error } = useQuery<CharacterListResponse>({
+  const { data, isLoading, error, refetch, isError } = useQuery<CharacterListResponse>({
     queryKey: ['characters', activeTab],
     queryFn: async () => {
-  const base = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
-  const response = await fetch(`${base}/api/characters?sort=${activeTab}&limit=12`);
+      const base = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+      const response = await fetch(`${base}/api/characters?sort=${activeTab}&limit=12`);
       if (!response.ok) {
-        throw new Error('Failed to fetch characters');
+        let detail = 'Failed to fetch characters';
+        try {
+          const errBody = await response.json();
+          if (errBody?.detail) detail = errBody.detail;
+        } catch (_) {}
+        throw new Error(detail);
       }
       return response.json();
     },
@@ -119,11 +124,11 @@ export default function HomePage() {
             </div>
           )}
 
-          {error && (
+          {isError && error && (
             <div className="text-center py-12">
-              <p className="text-red-600 mb-4">Failed to load characters. Please try again.</p>
+              <p className="text-red-600 mb-4">{error.message}</p>
               <button
-                onClick={() => window.location.reload()}
+                onClick={() => refetch()}
                 className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors"
               >
                 Retry

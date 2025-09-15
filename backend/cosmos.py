@@ -99,21 +99,9 @@ def count_characters() -> int:
     result = list(c.query_items(query=query, enable_cross_partition_query=True))
     return result[0] if result else 0
 
-def seed_characters():
-    if count_characters() > 0:
-        return
-    c = get_container_characters()
-    seed_data = [
-        dict(id="luna", name="Luna the Mystic", avatar_url="https://via.placeholder.com/150", short_description="A mysterious sorceress from the ethereal realm", tags=["fantasy","magical","mysterious"], rating_avg=4.8, rating_count=127, gem_cost_per_message=5, nsfw_flags=False, last_active=int(time.time())),
-        dict(id="zara", name="Zara the Adventurer", avatar_url="https://via.placeholder.com/150", short_description="Bold explorer seeking thrilling adventures", tags=["adventure","bold","explorer"], rating_avg=4.6, rating_count=89, gem_cost_per_message=4, nsfw_flags=False, last_active=int(time.time())),
-        dict(id="kai", name="Kai the Scholar", avatar_url="https://via.placeholder.com/150", short_description="Wise academic with endless knowledge", tags=["intellectual","wise","academic"], rating_avg=4.9, rating_count=203, gem_cost_per_message=6, nsfw_flags=False, last_active=int(time.time())),
-    ]
-    for row in seed_data:
-        try:
-            c.create_item(body=row)
-        except exceptions.CosmosHttpResponseError as e:
-            if e.status_code != 409:
-                raise
+class NoCharacterData(RuntimeError):
+    """Raised when expected character data is not present in Cosmos DB."""
+    pass
 
 def health_check() -> bool:
     # basic read of users container properties

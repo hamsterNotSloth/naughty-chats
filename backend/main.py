@@ -1,18 +1,26 @@
-from fastapi import FastAPI, Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import FastAPI, Depends, HTTPException, status, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from typing import Optional, List
 from passlib.context import CryptContext
-from jose import JWTError, jwt
-from datetime import datetime, timedelta
+from datetime import datetime
 import os
+import logging
 from dotenv import load_dotenv
 
 import cosmos  # changed from relative import to absolute to work when run as a top-level module
+from entra_auth import entra_dependency
 from anyio import to_thread
 
 load_dotenv()
+
+# Logging configuration
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    level=LOG_LEVEL,
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+)
+logger = logging.getLogger("naughty-chats")
 
 APP_VERSION = "0.1.0"
 app = FastAPI(title="Naughty Chats API", version=APP_VERSION)
@@ -32,38 +40,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Security / Auth (legacy local JWT fallback; Entra ID validation to be added)
-SECRET_KEY = os.getenv("SECRET_KEY") or ("dev-secret" if os.getenv("LOCAL_AUTH_ENABLED", "true").lower() == "true" else None)
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
-
-if SECRET_KEY is None:
-    # Fail fast in production if missing
-    raise RuntimeError("SECRET_KEY not set and LOCAL_AUTH_ENABLED is false. Configure SECRET_KEY or enable local auth.")
-
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-security = HTTPBearer()
 
 # Pydantic models
 class UserBase(BaseModel):
     email: EmailStr
     username: str
 
-class UserCreate(BaseModel):
+class UserCreate(BaseModel):  # retained for possible future self-service profile creation (not used now)
     email: EmailStr
-    password: str
+    password: str  # UNUSED with Entra (placeholder for compatibility)
     agreeTerms: bool
-
-class UserLogin(BaseModel):
-    identifier: str  # email or username
-    password: str
 
 class User(UserBase):
     id: str
     gemBalance: int
     isActive: bool
 
-class Token(BaseModel):
+class Token(BaseModel):  # deprecated; keep for backward compatibility if frontend still expects shape (will be removed)
     access_token: str
     token_type: str
     user: User
@@ -92,33 +86,24 @@ def verify_password(plain_password, hashed_password):
 def get_password_hash(password):
     return pwd_context.hash(password)
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(minutes=15)
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
-
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
-            raise credentials_exception
-    except JWTError:
-        raise credentials_exception
-
+async def get_current_user(authorization: Optional[str] = Header(None)):  # expects 'Authorization' header
+    claims = await entra_dependency(authorization)
+    # Prefer 'preferred_username' or 'upn' or 'email' claim for user identity
+    username = claims.get('preferred_username') or claims.get('upn') or claims.get('email') or claims.get('oid')
+    if not username:
+        raise HTTPException(status_code=401, detail="No usable identity claim in token")
+    # Ensure user exists (auto-provision pattern). Password unused with Entra.
     user_obj = await to_thread.run_sync(cosmos.get_user_by_username, username)
     if user_obj is None:
-        raise credentials_exception
+        # Try email claim
+        email_claim = claims.get('email') or username
+        # Create placeholder hashed password (not used); reuse existing helper
+        hashed_password = get_password_hash(os.urandom(8).hex())
+        try:
+            user_obj = await to_thread.run_sync(lambda: cosmos.create_user(username=username, email=email_claim, hashed_password=hashed_password))
+        except ValueError:
+            # Race: created by another request; fetch again
+            user_obj = await to_thread.run_sync(cosmos.get_user_by_username, username)
     return user_obj
 
 # API Endpoints
@@ -130,52 +115,18 @@ async def root():
 async def healthz():
     return {"status": "ok", "version": APP_VERSION}
 
-@app.post("/api/auth/register", response_model=Token)
-async def register(user: UserCreate):
-    # Validate terms agreement
-    if not user.agreeTerms:
-        raise HTTPException(status_code=400, detail="Must agree to terms and conditions")
-    # Use email as canonical username (not displayed on site)
-    username = user.email
-    existing_by_email = await to_thread.run_sync(cosmos.get_user_by_email, user.email)
-    if existing_by_email:
-        raise HTTPException(status_code=400, detail="User with this email already exists")
-
-    hashed_password = get_password_hash(user.password)
-    try:
-        # anyio.to_thread.run_sync passes args positionally; wrap with lambda to preserve keyword semantics
-        user_obj = await to_thread.run_sync(lambda: cosmos.create_user(username=username, email=user.email, hashed_password=hashed_password))
-    except ValueError:
-        raise HTTPException(status_code=400, detail="User already exists")
-
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(data={"sub": username}, expires_delta=access_token_expires)
-
-    user_response = User(
-        id=user_obj['id'],
-        email=user_obj['email'],
-        username=user_obj['username'],
-        gemBalance=user_obj['gem_balance'],
-        isActive=user_obj['is_active']
-    )
-    return {"access_token": access_token, "token_type": "bearer", "user": user_response, "gemBalance": user_obj['gem_balance']}
-
-@app.post("/api/auth/login", response_model=Token)
-async def login(user_credentials: UserLogin):
-    user_obj = await to_thread.run_sync(cosmos.get_user_by_username, user_credentials.identifier)
-    if user_obj is None:
-        user_obj = await to_thread.run_sync(cosmos.get_user_by_email, user_credentials.identifier)
-    if user_obj is None or not verify_password(user_credentials.password, user_obj['hashed_password']):
-        raise HTTPException(status_code=400, detail="Invalid credentials")
-
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(data={"sub": user_obj.username}, expires_delta=access_token_expires)
-    user_response = User(id=user_obj['id'], email=user_obj['email'], username=user_obj['username'], gemBalance=user_obj['gem_balance'], isActive=user_obj['is_active'])
-    return {"access_token": access_token, "token_type": "bearer", "user": user_response, "gemBalance": user_obj['gem_balance']}
+# Removed legacy /api/auth/register and /api/auth/login endpoints (Entra handles auth). Frontend should obtain access token via MSAL and call protected endpoints with Authorization header.
 
 @app.get("/api/characters", response_model=CharacterListResponse)
 async def get_characters(sort: str = "popular", limit: int = 12):
-    chars = await to_thread.run_sync(cosmos.list_characters, sort, limit)
+    try:
+        chars = await to_thread.run_sync(cosmos.list_characters, sort, limit)
+    except Exception as e:  # surface cosmos errors
+        logger.exception("Cosmos query failed for /api/characters")
+        raise HTTPException(status_code=500, detail=f"Cosmos query failed: {e}")
+    if not chars:
+        logger.error("No character data present in Cosmos DB (characters container empty)")
+        raise HTTPException(status_code=500, detail="No character data available in Cosmos DB")
     items = [
         CharacterSummary(
             id=c.get('id',''),
@@ -206,10 +157,9 @@ async def get_current_user_info(current_user = Depends(get_current_user)):
 async def on_startup():
     # Fail fast if cosmos unreachable
     if not cosmos.health_check():
+        logger.critical("Cosmos DB connectivity failed during startup")
         raise RuntimeError("Cosmos DB connectivity failed during startup")
-    # Seed characters (idempotent)
-    await to_thread.run_sync(cosmos.seed_characters)
-    print("Startup complete: Cosmos reachable and characters seeded (or already present)")
+    logger.info("Startup complete: Cosmos reachable")
 
 if __name__ == "__main__":
     import uvicorn

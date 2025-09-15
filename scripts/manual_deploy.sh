@@ -25,20 +25,13 @@ COSMOS_CHARACTERS_CONTAINER="characters"
 COSMOS_THROUGHPUT=400
 
 ### --------------------------- SECRETS INPUT --------------------------------------
-# Provide SECRET_KEY and Postgres admin password securely BEFORE running or interactively.
-# NEVER commit real values to source control.
-
-SECRET_KEY="${SECRET_KEY:-}"
 COSMOS_KEY="${COSMOS_KEY:-}"
+ENTRA_TENANT_ID="${ENTRA_TENANT_ID:-}"
+ENTRA_API_AUDIENCE="${ENTRA_API_AUDIENCE:-}"
 
-if [[ -z "$SECRET_KEY" ]]; then
-  read -r -p "Enter (or paste) SECRET_KEY (leave blank to auto-generate): " SECRET_KEY_INPUT || true
-  if [[ -z "$SECRET_KEY_INPUT" ]]; then
-    SECRET_KEY=$(python -c 'import secrets;print(secrets.token_urlsafe(48))')
-    echo "Generated SECRET_KEY (length: ${#SECRET_KEY})"
-  else
-    SECRET_KEY="$SECRET_KEY_INPUT"
-  fi
+if [[ -z "$ENTRA_TENANT_ID" || -z "$ENTRA_API_AUDIENCE" ]]; then
+  echo "ERROR: ENTRA_TENANT_ID and ENTRA_API_AUDIENCE must be exported before running (api://API_APP_ID)." >&2
+  exit 1
 fi
 
 if [[ -z "$COSMOS_KEY" ]]; then
@@ -135,13 +128,13 @@ if ! az containerapp show -n "$BACKEND_APP" -g "$RG" >/dev/null 2>&1; then
     --name "$BACKEND_APP" --resource-group "$RG" --environment "$CAE_ENV" \
     --image "$ACR_NAME.azurecr.io/backend:latest" --target-port 8000 --ingress external \
     --registry-server "$ACR_NAME.azurecr.io" --registry-username "$ACR_NAME" --registry-password "$ACR_PASSWORD" \
-  --secrets secret-key="$SECRET_KEY" cosmos-endpoint="$COSMOS_ENDPOINT" cosmos-key="$COSMOS_KEY" \
-  --env-vars SECRET_KEY=secretref:secret-key COSMOS_ENDPOINT=secretref:cosmos-endpoint COSMOS_KEY=secretref:cosmos-key COSMOS_DATABASE="$COSMOS_DB" COSMOS_USERS_CONTAINER="$COSMOS_USERS_CONTAINER" COSMOS_CHARACTERS_CONTAINER="$COSMOS_CHARACTERS_CONTAINER" ALLOWED_ORIGINS="*" LOCAL_AUTH_ENABLED="true"
+  --secrets cosmos-endpoint="$COSMOS_ENDPOINT" cosmos-key="$COSMOS_KEY" \
+  --env-vars COSMOS_ENDPOINT=secretref:cosmos-endpoint COSMOS_KEY=secretref:cosmos-key COSMOS_DATABASE="$COSMOS_DB" COSMOS_USERS_CONTAINER="$COSMOS_USERS_CONTAINER" COSMOS_CHARACTERS_CONTAINER="$COSMOS_CHARACTERS_CONTAINER" ALLOWED_ORIGINS="*" ENTRA_TENANT_ID="$ENTRA_TENANT_ID" ENTRA_API_AUDIENCE="$ENTRA_API_AUDIENCE"
 else
   echo "Updating backend image and env vars..."
   az containerapp update -n "$BACKEND_APP" -g "$RG" --image "$ACR_NAME.azurecr.io/backend:latest" \
-    --set-env-vars ALLOWED_ORIGINS="*" LOCAL_AUTH_ENABLED="true" COSMOS_DATABASE="$COSMOS_DB" COSMOS_USERS_CONTAINER="$COSMOS_USERS_CONTAINER" COSMOS_CHARACTERS_CONTAINER="$COSMOS_CHARACTERS_CONTAINER"
-  az containerapp secret set -n "$BACKEND_APP" -g "$RG" --secrets secret-key="$SECRET_KEY" cosmos-endpoint="$COSMOS_ENDPOINT" cosmos-key="$COSMOS_KEY"
+    --set-env-vars ALLOWED_ORIGINS="*" COSMOS_DATABASE="$COSMOS_DB" COSMOS_USERS_CONTAINER="$COSMOS_USERS_CONTAINER" COSMOS_CHARACTERS_CONTAINER="$COSMOS_CHARACTERS_CONTAINER" ENTRA_TENANT_ID="$ENTRA_TENANT_ID" ENTRA_API_AUDIENCE="$ENTRA_API_AUDIENCE"
+  az containerapp secret set -n "$BACKEND_APP" -g "$RG" --secrets cosmos-endpoint="$COSMOS_ENDPOINT" cosmos-key="$COSMOS_KEY"
 fi
 
 BACKEND_URL=$(az containerapp show -n "$BACKEND_APP" -g "$RG" --query properties.configuration.ingress.fqdn -o tsv)
