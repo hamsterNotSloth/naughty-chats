@@ -13,7 +13,7 @@ This document centralizes the implementation-focused technology decisions for Na
 ---
 ## 2. High-Level Architecture Summary
 
-User (Browser) → Next.js (SSR + Client) → FastAPI Backend (REST + WebSocket) → Services Layer (Auth, Characters, Chat, Image Jobs, Economy) → Async Workers / Model Inference Providers (RunPod) → Data Stores (Postgres, Redis, Blob Storage) → Observability & Payments (Stripe or Alt Provider).
+User (Browser) → Next.js (SSR + Client) → FastAPI Backend (REST + WebSocket) → Services Layer (Auth, Characters, Chat, Image Jobs, Economy) → Async Workers / Model Inference Providers (RunPod) → Data Stores (Cosmos DB NoSQL, (Future) Redis/Cache, Blob Storage) → Observability & Payments (Stripe or Alt Provider).
 
 Edge & Delivery: CDN / Front Door terminates TLS and routes to frontend (Next.js) and API (Container Apps). WebSockets proxied through same API origin for simplicity.
 
@@ -51,9 +51,9 @@ Edge & Delivery: CDN / Front Door terminates TLS and routes to frontend (Next.js
 | Password Hash | passlib (bcrypt) | Security standard | Adjust cost factor with perf tests |
 | Input Validation | Pydantic v2 | Built-in with FastAPI | Add custom validators for moderation tags |
 | Config | python-dotenv → env vars | Simplicity local | Move secrets to Key Vault binding |
-| Rate Limiting | (Planned) Redis counters | Abuse prevention | Library: slowapi or custom middleware |
+| Rate Limiting | (Planned) Redis / in-memory placeholder | Abuse prevention | Introduce Redis only when required |
 | Background Tasks | Separate worker (Celery or custom asyncio) | Async job handling | Decide early; Celery if scheduling needed |
-| Messaging | Redis Streams or Azure Service Bus | Queued events | Start with Redis; migrate when scale demands |
+| Messaging | (Planned) Service Bus (future) | Queued events | Skip interim Redis Streams unless necessary |
 | Image Job Polling | Scheduled worker pull from RunPod | Simplicity first | Event push if provider adds webhook |
 | Moderation | Pre/post filters + async review queue | Risk mitigation | Use provider classifiers + custom rules |
 
@@ -76,23 +76,27 @@ Each module exposes pure functions or small classes; avoid deep inheritance. Dep
 - Add CSRF protection for refresh token flow.
 
 ---
-## 5. Data & Storage
+ 
+## 5. Data & Storage (Updated – Cosmos DB Adopted)
 
 | Type | Technology | Purpose | Notes |
 |------|------------|---------|-------|
-| Primary DB | PostgreSQL (Flexible Server) | Core relational entities | Schema versioning via Alembic |
-| Cache / Rate Limit | Redis | Low latency access, counters | TTL strategy doc to follow |
-| Search (Phase 2+) | (Temp) Postgres full text → Azure AI Search later | Character/tag search | Abstraction boundary early |
-| Queue / Events | Redis Streams (MVP) → Service Bus | Job + moderation events | Migration strategy doc later |
+| Primary DB | Azure Cosmos DB (Core API / NoSQL) | Users, characters | Simple doc model; add composite indexes later |
+| Cache / Rate Limit | (Future) Azure Cache for Redis | Low latency access, counters | Introduce after RU profiling |
+| Search (Phase 2+) | (Temp) In-memory filter → Azure AI Search | Character/tag search | Add service when discovery expands |
+| Queue / Events | (Planned) Service Bus | Job + moderation events | Add once async workflows scale |
 | Analytics (Later) | Event table + export pipeline | KPI instrumentation | Offload to warehouse when volume grows |
 
-### 5.1 Schema Principles
+### 5.1 Document Modeling Principles (Cosmos)
 
-- Immutable ledger lines; derive balance server-side.
-- Soft deletes with `deleted_at` for reversible moderation actions.
-- Audit columns: `created_at`, `updated_at`, `created_by` where relevant.
+- Denormalize for primary read paths (user lookups, character list).
+- Partition key currently `/id` (simple; revisit if RU hot-spot emerges).
+- Use ISO 8601 UTC timestamps: `created_at`, `updated_at`.
+- Reserve future containers for high-write domains (economy ledger) with partitioning by user id.
+- Add synthetic/composite indexes only after measuring query needs.
 
 ---
+ 
 ## 6. AI / ML Model Layer
 
 | Function | Provider | Model Class | Notes |
@@ -213,7 +217,8 @@ Dev convenience: Add Makefile or Taskfile for common commands.
 | Topic | Status | Notes |
 |-------|--------|-------|
 | Celery vs custom workers | TBD | Decide before implementing image queue |
-| Redis vs Service Bus | Start Redis | Migrate when scaling beyond single region |
+| Queue Strategy | Defer (Service Bus later) | Add when async workloads land |
+| Redis Introduction | Deferred | Only if RU/cost or latency requires caching |
 | RS256 JWT & rotation | Phase 1.1 | Needs Key Vault integration |
 | Alt payments adoption | Research | Evaluate legal/compliance risk |
 | Search provider | Defer | Postgres FTS adequate early |
@@ -226,7 +231,8 @@ All modifications via PR referencing issue. Include section diff in PR descripti
 ---
 ## 14. Appendix
 ### 14.1 Proposed Directory Additions
-```
+
+```text
 backend/
   services/
   models/  # SQLAlchemy or Pydantic models
@@ -242,6 +248,7 @@ frontend/
 ```
 
 ### 14.2 Gem Pricing Config (Example Placeholder)
+
 | Tier | Balanced | Premium |
 |------|----------|---------|
 | Chat (per AI msg) | 5 gems | 9 gems |
@@ -251,7 +258,9 @@ frontend/
 Adjust based on actual model cost analysis.
 
 ---
+ 
 ## 15. Summary
+
 This stack emphasizes pragmatic, modular choices enabling fast iteration while keeping clear upgrade paths (keys rotation, queue migration, multi-model abstraction). As complexity grows, revisit: search service, dedicated feature flag service, structured event warehouse, and global edge inference.
 
 > Next Actions: Implement service module scaffolding, decide worker framework, add infra as code baseline, and integrate Stripe sandbox.

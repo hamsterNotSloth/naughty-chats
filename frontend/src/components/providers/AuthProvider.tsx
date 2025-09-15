@@ -25,13 +25,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user is already logged in
+    const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
     const token = localStorage.getItem('access_token');
     if (token) {
-      fetch('http://localhost:8000/api/me', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+      fetch(`${apiBase}/api/me`, {
+        headers: { 'Authorization': `Bearer ${token}` },
       })
         .then(response => {
           if (response.ok) {
@@ -54,7 +52,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signIn = async (identifier: string, password: string) => {
-    const response = await fetch('http://localhost:8000/api/auth/login', {
+    const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+    const response = await fetch(`${apiBase}/api/auth/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -73,7 +72,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signUp = async (email: string, password: string, agreeTerms: boolean) => {
-    const response = await fetch('http://localhost:8000/api/auth/register', {
+    const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+    const response = await fetch(`${apiBase}/api/auth/register`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

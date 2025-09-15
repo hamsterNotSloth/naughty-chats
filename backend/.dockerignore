@@ -1,0 +1,15 @@
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.env
+*.log
+.eggs
+*.egg-info
+.git
+.gitignore
+venv/
+.cache/
+.idea/
+.mypy_cache/
+.pytest_cache/

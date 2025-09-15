@@ -31,7 +31,8 @@ export default function HomePage() {
   const { data, isLoading, error } = useQuery<CharacterListResponse>({
     queryKey: ['characters', activeTab],
     queryFn: async () => {
-      const response = await fetch(`http://localhost:8000/api/characters?sort=${activeTab}&limit=12`);
+  const base = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+  const response = await fetch(`${base}/api/characters?sort=${activeTab}&limit=12`);
       if (!response.ok) {
         throw new Error('Failed to fetch characters');
       }

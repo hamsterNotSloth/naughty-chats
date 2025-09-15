@@ -1,0 +1,86 @@
+name: CI-CD Container Apps
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  REGION: eastus
+  PREFIX: nchat
+  ENVIRONMENT: dev
+  ACR_NAME: acrnchatdev
+  BACKEND_IMAGE_NAME: naughty-chats-backend
+  FRONTEND_IMAGE_NAME: naughty-chats-frontend
+  BACKEND_APP: ca-nchat-api-dev
+  FRONTEND_APP: ca-nchat-web-dev
+  RESOURCE_GROUP: rg-nchat-dev
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Derive tags
+        id: vars
+        run: |
+          GIT_SHA=$(git rev-parse --short HEAD)
+          echo "sha=$GIT_SHA" >> $GITHUB_OUTPUT
+          echo "backend_image=${{ env.ACR_NAME }}.azurecr.io/${{ env.BACKEND_IMAGE_NAME }}:$GIT_SHA" >> $GITHUB_OUTPUT
+          echo "frontend_image=${{ env.ACR_NAME }}.azurecr.io/${{ env.FRONTEND_IMAGE_NAME }}:$GIT_SHA" >> $GITHUB_OUTPUT
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+            
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: ACR Login
+        run: az acr login --name ${{ env.ACR_NAME }}
+
+      - name: Backend - Build image
+        run: |
+          docker build -f backend/Dockerfile -t ${{ steps.vars.outputs.backend_image }} -t ${{ env.ACR_NAME }}.azurecr.io/${{ env.BACKEND_IMAGE_NAME }}:latest .
+
+      - name: Frontend - Build image
+        run: |
+          docker build -f frontend/Dockerfile -t ${{ steps.vars.outputs.frontend_image }} -t ${{ env.ACR_NAME }}.azurecr.io/${{ env.FRONTEND_IMAGE_NAME }}:latest .
+
+      - name: Push images
+        run: |
+          docker push ${{ steps.vars.outputs.backend_image }}
+          docker push ${{ env.ACR_NAME }}.azurecr.io/${{ env.BACKEND_IMAGE_NAME }}:latest
+          docker push ${{ steps.vars.outputs.frontend_image }}
+          docker push ${{ env.ACR_NAME }}.azurecr.io/${{ env.FRONTEND_IMAGE_NAME }}:latest
+
+      - name: Update Backend Container App
+        run: |
+          az containerapp update \
+            -g ${{ env.RESOURCE_GROUP }} -n ${{ env.BACKEND_APP }} \
+            --image ${{ steps.vars.outputs.backend_image }}
+
+      - name: Update Frontend Container App
+        run: |
+          az containerapp update \
+            -g ${{ env.RESOURCE_GROUP }} -n ${{ env.FRONTEND_APP }} \
+            --image ${{ steps.vars.outputs.frontend_image }}
+
+      - name: Backend health check
+        run: |
+          FQDN=$(az containerapp show -g ${{ env.RESOURCE_GROUP }} -n ${{ env.BACKEND_APP }} --query properties.configuration.ingress.fqdn -o tsv)
+          echo "Backend FQDN: $FQDN"
+          curl -fsS https://$FQDN/healthz || (echo "Health check failed" && exit 1)
+
+      - name: Summary
+        run: |
+          echo "Backend Image: ${{ steps.vars.outputs.backend_image }}"
+          echo "Frontend Image: ${{ steps.vars.outputs.frontend_image }}"
+          echo "Done."
