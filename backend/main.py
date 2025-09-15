@@ -135,29 +135,20 @@ async def register(user: UserCreate):
     # Validate terms agreement
     if not user.agreeTerms:
         raise HTTPException(status_code=400, detail="Must agree to terms and conditions")
-
-    # Derive a base username from email local part and ensure uniqueness
-    base_username = user.email.split('@')[0]
-    candidate = base_username
-    suffix = 1
-    # Loop until unique in Cosmos
-    while await to_thread.run_sync(cosmos.get_user_by_username, candidate) is not None:
-        candidate = f"{base_username}{suffix}"
-        suffix += 1
-
-    # Check email uniqueness
-    existing_email = await to_thread.run_sync(cosmos.get_user_by_email, user.email)
-    if existing_email:
+    # Use email as canonical username (not displayed on site)
+    username = user.email
+    existing_by_email = await to_thread.run_sync(cosmos.get_user_by_email, user.email)
+    if existing_by_email:
         raise HTTPException(status_code=400, detail="User with this email already exists")
 
     hashed_password = get_password_hash(user.password)
     try:
-        user_obj = await to_thread.run_sync(cosmos.create_user, email=user.email, username=candidate, hashed_password=hashed_password)
+        user_obj = await to_thread.run_sync(cosmos.create_user, email=user.email, username=username, hashed_password=hashed_password)
     except ValueError:
         raise HTTPException(status_code=400, detail="User already exists")
 
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(data={"sub": candidate}, expires_delta=access_token_expires)
+    access_token = create_access_token(data={"sub": username}, expires_delta=access_token_expires)
 
     user_response = User(
         id=user_obj['id'],

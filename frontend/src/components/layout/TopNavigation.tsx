@@ -64,7 +64,8 @@ export function TopNavigation() {
                   <Menu.Button className="flex items-center text-sm rounded-full text-gray-300 hover:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-gray-900">
                     <span className="sr-only">Open user menu</span>
                     <div className="h-8 w-8 rounded-full bg-purple-600 flex items-center justify-center">
-                      {user.username.charAt(0).toUpperCase()}
+                      {/* Use email-derived initial; username equals email internally but we avoid displaying full email */}
+                      {user.email.charAt(0).toUpperCase()}
                     </div>
                   </Menu.Button>
                   <Transition
