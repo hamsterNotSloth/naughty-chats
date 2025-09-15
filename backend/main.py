@@ -143,7 +143,8 @@ async def register(user: UserCreate):
 
     hashed_password = get_password_hash(user.password)
     try:
-        user_obj = await to_thread.run_sync(cosmos.create_user, email=user.email, username=username, hashed_password=hashed_password)
+        # anyio.to_thread.run_sync passes args positionally; wrap with lambda to preserve keyword semantics
+        user_obj = await to_thread.run_sync(lambda: cosmos.create_user(username=username, email=user.email, hashed_password=hashed_password))
     except ValueError:
         raise HTTPException(status_code=400, detail="User already exists")
 
