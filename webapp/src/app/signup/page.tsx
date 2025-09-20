@@ -18,7 +18,6 @@ interface PasswordStrength {
 export default function SignUpPage() {
   const [formData, setFormData] = useState({
     email: '',
-    username: '',
     password: '',
     confirmPassword: '',
     birthYear: '',
@@ -27,8 +26,6 @@ export default function SignUpPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const [isCheckingUsername, setIsCheckingUsername] = useState(false)
-  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null)
   const [error, setError] = useState('')
   const [passwordStrength, setPasswordStrength] = useState<PasswordStrength>({
     hasMinLength: false,
@@ -51,21 +48,6 @@ export default function SignUpPage() {
   const handlePasswordChange = (password: string) => {
     setFormData({...formData, password})
     setPasswordStrength(checkPasswordStrength(password))
-  }
-
-  const handleUsernameChange = async (username: string) => {
-    setFormData({...formData, username})
-    
-    if (username.length >= 3) {
-      setIsCheckingUsername(true)
-      // Mock username availability check
-      setTimeout(() => {
-        setUsernameAvailable(!['admin', 'test', 'user'].includes(username.toLowerCase()))
-        setIsCheckingUsername(false)
-      }, 500)
-    } else {
-      setUsernameAvailable(null)
-    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -205,41 +187,6 @@ export default function SignUpPage() {
               </div>
 
               <div className="space-y-2">
-                <label htmlFor="username" className="text-sm font-medium text-gray-300">
-                  Username
-                </label>
-                <div className="relative">
-                  <Input
-                    id="username"
-                    type="text"
-                    placeholder="Choose a username"
-                    value={formData.username}
-                    onChange={(e) => handleUsernameChange(e.target.value)}
-                    className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-purple-500 pr-10"
-                    required
-                    minLength={3}
-                  />
-                  {formData.username.length >= 3 && (
-                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
-                      {isCheckingUsername ? (
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-500"></div>
-                      ) : usernameAvailable === true ? (
-                        <CheckIcon className="h-5 w-5 text-green-500" />
-                      ) : usernameAvailable === false ? (
-                        <XMarkIcon className="h-5 w-5 text-red-500" />
-                      ) : null}
-                    </div>
-                  )}
-                </div>
-                {usernameAvailable === false && (
-                  <p className="text-sm text-red-400">Username is not available</p>
-                )}
-                {usernameAvailable === true && (
-                  <p className="text-sm text-green-400">Username is available</p>
-                )}
-              </div>
-
-              <div className="space-y-2">
                 <label htmlFor="password" className="text-sm font-medium text-gray-300">
                   Password
                 </label>
@@ -370,7 +317,7 @@ export default function SignUpPage() {
               <Button
                 type="submit"
                 className="w-full bg-purple-600 hover:bg-purple-700 text-white"
-                disabled={isLoading || !isPasswordValid || usernameAvailable === false}
+                disabled={isLoading || !isPasswordValid}
               >
                 {isLoading ? 'Creating Account...' : 'Create Account'}
               </Button>

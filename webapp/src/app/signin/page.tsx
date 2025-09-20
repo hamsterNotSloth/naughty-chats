@@ -9,7 +9,7 @@ import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline'
 
 export default function SignInPage() {
   const [formData, setFormData] = useState({
-    identifier: '',
+    email: '',
     password: '',
     rememberMe: false
   })
@@ -28,7 +28,7 @@ export default function SignInPage() {
       await new Promise(resolve => setTimeout(resolve, 1000))
       
       // Mock validation
-      if (formData.identifier === 'demo@example.com' && formData.password === 'password') {
+      if (formData.email === 'demo@example.com' && formData.password === 'password') {
         // Success - would redirect to dashboard
         alert('Sign in successful!')
       } else {
@@ -111,15 +111,15 @@ export default function SignInPage() {
               )}
 
               <div className="space-y-2">
-                <label htmlFor="identifier" className="text-sm font-medium text-gray-300">
-                  Email or Username
+                <label htmlFor="email" className="text-sm font-medium text-gray-300">
+                  Email
                 </label>
                 <Input
-                  id="identifier"
-                  type="text"
-                  placeholder="Enter your email or username"
-                  value={formData.identifier}
-                  onChange={(e) => setFormData({...formData, identifier: e.target.value})}
+                  id="email"
+                  type="email"
+                  placeholder="Enter your email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({...formData, email: e.target.value})}
                   className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-purple-500"
                   required
                 />
