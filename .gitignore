@@ -1,1 +1,35 @@
 .DS_Store
+
+# Dependencies
+webapp/node_modules/
+webapp/.next/
+webapp/out/
+
+# Production builds
+webapp/build/
+webapp/dist/
+
+# Environment variables
+webapp/.env*
+
+# IDE files
+.vscode/
+.idea/
+
+# Logs
+webapp/*.log
+webapp/npm-debug.log*
+webapp/yarn-debug.log*
+webapp/yarn-error.log*
+
+# Runtime data
+webapp/pids
+webapp/*.pid
+webapp/*.seed
+webapp/*.pid.lock
+
+# Coverage directory used by tools like istanbul
+webapp/coverage/
+
+# temp files
+/tmp/
