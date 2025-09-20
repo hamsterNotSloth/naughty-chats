@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 import cosmos  # changed from relative import to absolute to work when run as a top-level module
 from entra_auth import entra_dependency
 from anyio import to_thread
+import cosmos as cosmos_module
 
 load_dotenv()
 
@@ -56,6 +57,9 @@ class User(UserBase):
     id: str
     gemBalance: int
     isActive: bool
+    avatarUrl: Optional[str] = None
+    marketingOptIn: bool = False
+    termsAgreedAt: Optional[int] = None
 
 class Token(BaseModel):  # deprecated; keep for backward compatibility if frontend still expects shape (will be removed)
     access_token: str
@@ -78,6 +82,12 @@ class CharacterSummary(BaseModel):
 class CharacterListResponse(BaseModel):
     items: List[CharacterSummary]
     nextCursor: Optional[str] = None
+
+class UserProfileUpdate(BaseModel):
+    avatarUrl: Optional[str] = None
+    marketingOptIn: Optional[bool] = None
+    agreeTerms: Optional[bool] = None
+    # Future: displayName, bio, etc.
 
 # Helper functions
 def verify_password(plain_password, hashed_password):
@@ -151,6 +161,37 @@ async def get_current_user_info(current_user = Depends(get_current_user)):
         username=current_user['username'],
         gemBalance=current_user['gem_balance'],
         isActive=current_user['is_active'],
+        avatarUrl=current_user.get('avatar_url'),
+        marketingOptIn=current_user.get('marketing_opt_in', False),
+        termsAgreedAt=current_user.get('terms_agreed_at')
+    )
+
+@app.patch("/api/me", response_model=User)
+async def update_profile(payload: UserProfileUpdate, current_user = Depends(get_current_user)):
+    fields = {}
+    if payload.avatarUrl is not None:
+        fields['avatar_url'] = payload.avatarUrl
+    if payload.marketingOptIn is not None:
+        fields['marketing_opt_in'] = payload.marketingOptIn
+    if payload.agreeTerms:
+        # record Unix timestamp if newly agreeing
+        if not current_user.get('terms_agreed_at'):
+            fields['terms_agreed_at'] = int(datetime.utcnow().timestamp())
+    if not fields:
+        # nothing to change, return current state
+        return await get_current_user_info(current_user)
+    updated = await to_thread.run_sync(lambda: cosmos_module.update_user(current_user['username'], **fields))
+    if updated is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return User(
+        id=updated['id'],
+        email=updated['email'],
+        username=updated['username'],
+        gemBalance=updated['gem_balance'],
+        isActive=updated['is_active'],
+        avatarUrl=updated.get('avatar_url'),
+        marketingOptIn=updated.get('marketing_opt_in', False),
+        termsAgreedAt=updated.get('terms_agreed_at')
     )
 
 @app.on_event("startup")

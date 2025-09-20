@@ -8,7 +8,7 @@ import { Menu, Transition } from '@headlessui/react';
 import { Fragment } from 'react';
 
 export function TopNavigation() {
-  const { user, signOut } = useAuth();
+  const { user, logout, login } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const navigation = [
@@ -105,7 +105,7 @@ export function TopNavigation() {
                       <Menu.Item>
                         {({ active }) => (
                           <button
-                            onClick={signOut}
+                            onClick={logout}
                             className={`block w-full text-left px-4 py-2 text-sm text-gray-700 ${
                               active ? 'bg-gray-100' : ''
                             }`}
@@ -119,20 +119,12 @@ export function TopNavigation() {
                 </Menu>
               </>
             ) : (
-              <div className="flex space-x-2">
-                <Link
-                  href="/signin"
-                  className="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors"
-                >
-                  Sign In
-                </Link>
-                <Link
-                  href="/signup"
-                  className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
-                >
-                  Sign Up
-                </Link>
-              </div>
+              <button
+                onClick={login}
+                className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+              >
+                Sign In
+              </button>
             )}
           </div>
 
@@ -183,7 +175,7 @@ export function TopNavigation() {
                   </Link>
                   <button
                     onClick={() => {
-                      signOut();
+                      logout();
                       setIsMenuOpen(false);
                     }}
                     className="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700"
@@ -192,22 +184,15 @@ export function TopNavigation() {
                   </button>
                 </>
               ) : (
-                <>
-                  <Link
-                    href="/signin"
-                    className="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700"
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    Sign In
-                  </Link>
-                  <Link
-                    href="/signup"
-                    className="block px-3 py-2 rounded-md text-base font-medium bg-gray-700 hover:bg-gray-600 text-white"
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    Sign Up
-                  </Link>
-                </>
+                <button
+                  onClick={() => {
+                    login();
+                    setIsMenuOpen(false);
+                  }}
+                  className="block w-full text-left px-3 py-2 rounded-md text-base font-medium bg-gray-700 hover:bg-gray-600 text-white"
+                >
+                  Sign In
+                </button>
               )}
             </div>
           </div>

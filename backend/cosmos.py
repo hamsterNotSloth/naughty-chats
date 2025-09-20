@@ -59,7 +59,10 @@ def create_user(*, username: str, email: str, hashed_password: str) -> Dict[str,
         'hashed_password': hashed_password,
         'gem_balance': 100,
         'is_active': True,
-        'created_at': int(time.time())
+        'created_at': int(time.time()),
+        'avatar_url': None,
+        'terms_agreed_at': None,
+        'marketing_opt_in': False,
     }
     try:
         c.create_item(body=doc)
@@ -81,6 +84,28 @@ def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
     query = "SELECT * FROM c WHERE c.email = @email"
     items = list(c.query_items(query=query, parameters=[{"name": "@email", "value": email}], enable_cross_partition_query=True))
     return items[0] if items else None
+
+def update_user(username: str, **fields) -> Optional[Dict[str, Any]]:
+    """Patch limited mutable profile fields for a user.
+
+    Because we use username as the id/partition key we cannot rename usernames
+    without a more invasive migration (create new doc + delete old). Therefore this
+    helper explicitly forbids changing 'id' or 'username'.
+    """
+    forbidden = {"id", "username", "hashed_password", "gem_balance"}
+    for k in list(fields.keys()):
+        if k in forbidden:
+            fields.pop(k)
+    if not fields:
+        return get_user_by_username(username)
+    container = get_container_users()
+    try:
+        doc = container.read_item(item=username, partition_key=username)
+    except exceptions.CosmosResourceNotFoundError:
+        return None
+    doc.update(fields)
+    container.replace_item(item=doc['id'], body=doc)
+    return doc
 
 def list_characters(sort: str = "popular", limit: int = 12) -> List[Dict[str, Any]]:
     c = get_container_characters()

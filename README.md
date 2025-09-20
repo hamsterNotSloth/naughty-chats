@@ -2,6 +2,8 @@
 
 FastAPI + Next.js application deployed on Azure Container Apps with Microsoft Entra ID / External ID (B2C) authentication and Cosmos DB for persistence. Extensible for social identity (Google, Twitter, Discord) via Entra External ID.
 
+> Update (Auth v2): Added profile onboarding + partial NextAuth integration. Users are auto-provisioned on first token use; optional avatar & terms agreement tracked via `PATCH /api/me`. MSAL remains primary for SPA token acquisition, while NextAuth scaffold (`/api/auth/[...nextauth]`) enables future SSR/session usage and multi-provider expansion.
+
 ## High-Level Architecture
 
 ```text
@@ -16,12 +18,20 @@ Next.js (web)  ---- REST ----> FastAPI (api) ----> Cosmos DB
                  +---- Azure Container Registry (images)
 ```
 
-## Auth Flow Summary
+## Auth Flow Summary (Hybrid MSAL + NextAuth Scaffold)
 
-1. User clicks Sign In → redirected to Entra (or B2C user flow with social providers).
-2. After authentication MSAL stores tokens; frontend acquires API scope.
-3. Backend validates token (issuer, signature, audience) using dynamic JWKS.
-4. If user does not exist, backend creates a user document (auto-provisioning).
+Authentication uses Microsoft Entra ID (standard tenant or External ID/B2C). Core user identity tokens are acquired by MSAL in the browser. NextAuth is introduced (Azure AD provider) for future SSR-oriented flows & simpler multi-provider extension, but is not yet the canonical token source for API calls.
+
+1. User initiates Sign In via popup (no forced redirect to preserve session context).
+2. MSAL obtains ID/Access token for configured API scope (`api://<API_APP_ID>/...`).
+3. Backend validates access token (signature, aud, iss, exp) every request.
+4. If user document absent, backend auto-provisions with gem balance & inactive profile fields.
+5. Frontend optionally issues `PATCH /api/me` with avatar / terms acceptance / marketing preferences.
+6. Future: Additional providers (Discord, Google) layered in through NextAuth; backend unchanged (still Entra validation if unified via External ID federation) or extended to accept JWTs from multiple issuers.
+
+Profile Lifecycle Additions:
+- New fields: `avatar_url`, `terms_agreed_at`, `marketing_opt_in` (read-only exposure as camelCase to client).
+- Endpoint: `PATCH /api/me` to update subset (cannot rename username or adjust gem balances).
 
 ## Repository Structure
 
@@ -53,27 +63,55 @@ export ENTRA_API_AUDIENCE=api://<API_APP_ID>
 uvicorn backend.main:app --reload --port 8000
 ```
 
-Frontend:
+Frontend (popup auth + onboarding):
 
 ```bash
 cd frontend
 npm install
 export NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
-export NEXT_PUBLIC_ENTRA_CLIENT_ID=<SPA_APP_ID>
-export NEXT_PUBLIC_ENTRA_TENANT_ID=<TENANT_GUID>
-export NEXT_PUBLIC_ENTRA_API_SCOPE=api://<API_APP_ID>/.default
+export NEXT_PUBLIC_ENTRA_CLIENT_ID=<SPA_APP_CLIENT_ID>
+export NEXT_PUBLIC_ENTRA_API_SCOPE=api://<API_APP_ID>/User.Impersonation   # or api://<API_APP_ID>/.default
 npm run dev
 ```
 
-Visit <http://localhost:3000>.
+Visit <http://localhost:3000>. Use the Sign In / Sign Up buttons (popup). On first sign-in the terms checkbox (signup) triggers a profile patch.
 
-To enable B2C/social, also set (both sides):
+### Additional Frontend Env (NextAuth scaffold)
+
+If enabling NextAuth route:
+```bash
+export AZURE_AD_CLIENT_ID=<SPA_APP_CLIENT_ID>
+export AZURE_AD_CLIENT_SECRET=<CONFIDENTIAL_SECRET if using web app>
+export AZURE_AD_TENANT_ID=<TENANT_GUID>
+export NEXTAUTH_SECRET=$(openssl rand -base64 32)
+```
+Currently optional—MSAL flow works without these (unless you navigate to `/api/auth/signin`).
+
+To enable B2C/social (External ID tenant), also set (both sides):
 
 ```bash
 export ENTRA_B2C_POLICY=B2C_1_SIGNUPSIGNIN
 export ENTRA_B2C_TENANT_PRIMARY_DOMAIN=yourtenant.onmicrosoft.com
 export NEXT_PUBLIC_B2C_TENANT_NAME=yourtenant
 export NEXT_PUBLIC_B2C_USER_FLOW=B2C_1_SIGNUPSIGNIN
+# Optional explicit override (normally omit):
+# export NEXT_PUBLIC_ENTRA_AUTHORITY="https://yourtenant.b2clogin.com/yourtenant.onmicrosoft.com/B2C_1_SIGNUPSIGNIN/v2.0"
+
+Example backend `.env` snippet (see `backend/.env.example`):
+
+```bash
+ENTRA_API_AUDIENCE=api://<API_APP_ID>
+ENTRA_B2C_TENANT_PRIMARY_DOMAIN=yourtenant.onmicrosoft.com
+ENTRA_B2C_POLICY=B2C_1_SIGNUPSIGNIN
+```
+
+Example frontend `.env.local` snippet (see `frontend/.env.example`):
+
+```bash
+NEXT_PUBLIC_ENTRA_CLIENT_ID=<SPA_APP_CLIENT_ID>
+NEXT_PUBLIC_ENTRA_API_SCOPE=api://<API_APP_ID>/User.Impersonation
+NEXT_PUBLIC_B2C_TENANT_NAME=yourtenant
+NEXT_PUBLIC_B2C_USER_FLOW=B2C_1_SIGNUPSIGNIN
 ```
 
 ## Infrastructure Deployment (azd)
@@ -104,6 +142,9 @@ azd env get-values | grep apiFqdn
 ## Testing
 
 Auth tests use synthetic RSA keys & mocked JWKS: see `backend/tests/test_auth.py`.
+
+Profile update test (`backend/tests/test_profile_update.py`) validates onboarding PATCH semantics with a mocked token validator.
+
 Run:
 
 ```bash
@@ -116,8 +157,9 @@ pytest -q
 - Key Vault + Managed Identity (remove Cosmos key secret)
 - App Insights + OpenTelemetry tracing
 - Image tag parameterization (Git SHA)
-- Enhanced RBAC & scope separation
+- Enhanced RBAC & multi-issuer trust (NextAuth providers) with metadata caching
 - Pagination & RU optimization
+- Avatar upload to Azure Blob Storage with SAS token issuance
 
 ## License
 
