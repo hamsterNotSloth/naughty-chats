@@ -263,13 +263,12 @@ AI Model Inference:
 - Dynamic Throttling: If queue depth or average token latency > threshold, degrade to lower-cost model automatically with user banner (Phase 2).
 
 Data Stores:
-- Primary OLTP DB: Postgres (Azure Database for PostgreSQL Flexible Server) – entities: users, characters, chats, messages, images, gem_ledger, affiliate_referrals, moderation_items.
-- Caching: Redis (Azure Cache for Redis) for session tokens, rate limiting counters, trending tag aggregates, generation job polling acceleration.
+- Primary OLTP DB: Cosmos DB (Azure Cosmos DB Core SQL API) – entities: users, characters, chats, messages, images, gem_ledger, affiliate_referrals, moderation_items.
 - Object Storage: Azure Blob Storage for generated images & prompt logs (sanitized), with signed URL delivery.
-- Search/Discovery (Phase 2+): Optional Azure Cognitive Search or Postgres full text for character & tag search initial.
+- Search/Discovery (Phase 2+): Optional Azure Cognitive Search or Cosmos DB-backed search/indexing for character & tag search initial.
 
 Messaging / Async:
-- Internal queue (Redis streams or Azure Service Bus) for image job lifecycle events (QUEUED → PROCESSING → COMPLETE/FAILED) and moderation tasks.
+- Internal queue (Azure Service Bus) for image job lifecycle events (QUEUED → PROCESSING → COMPLETE/FAILED) and moderation tasks.
 
 Deployment Targets:
 - Frontend: Azure Static Web Apps or Azure App Service (SSR) depending on need for server-side auth headers. (Decision: start with App Service for unified domain + custom headers.)
