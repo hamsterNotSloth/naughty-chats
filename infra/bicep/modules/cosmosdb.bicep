@@ -15,11 +15,7 @@ resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2021-04-15' = {
         failoverPriority: 0
       }
     ]
-    capabilities: [
-      {
-        name: 'EnableServerless'
-      }
-    ]
+    // Remove serverless capability by default for dev to avoid regional capacity failures
     consistencyPolicy: {
       defaultConsistencyLevel: 'Session'
     }

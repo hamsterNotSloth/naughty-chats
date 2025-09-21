@@ -1,0 +1,15 @@
+/**/node_modules
+**/.venv
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/*.db
+**/*.sqlite3
+**/dist
+**/build
+**/.git
+**/.github
+!.github/workflows
+# allow backend directory in build context
+!/backend

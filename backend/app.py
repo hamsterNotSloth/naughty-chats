@@ -1,6 +1,7 @@
 import os
 from fastapi import FastAPI, HTTPException, Depends, WebSocket
 from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
 
 try:
     from azure.cosmos import CosmosClient
@@ -14,6 +15,17 @@ from .api import characters as characters_router
 from .api import chat as chat_router
 
 app = FastAPI(title="naughty-chats-backend")
+
+# configure CORS (allow dev frontend origins)
+_cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,https://naughty-frontend-dev-ysurana.eastus.azurecontainer.io")
+_origins = [o.strip() for o in _cors_origins.split(",") if o.strip()]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # include routers
 app.include_router(auth_routes.router)

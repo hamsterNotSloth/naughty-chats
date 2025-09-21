@@ -1,7 +1,7 @@
 @description('Storage module skeleton for blobs')
 param location string
 param env string = 'dev'
-param storageAccountName string = 'naughtychats${env}${uniqueString(resourceGroup().id)}'
+param storageAccountName string = toLower('naughtystg${uniqueString(resourceGroup().id)}')
 
 resource storageAccount 'Microsoft.Storage/storageAccounts@2022-09-01' = {
   name: storageAccountName

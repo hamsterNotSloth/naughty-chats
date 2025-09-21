@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.37.4.10188",
-      "templateHash": "16275838060758550204"
+      "templateHash": "7538569318485698599"
     }
   },
   "parameters": {
@@ -37,11 +37,6 @@
           {
             "locationName": "[parameters('location')]",
             "failoverPriority": 0
-          }
-        ],
-        "capabilities": [
-          {
-            "name": "EnableServerless"
           }
         ],
         "consistencyPolicy": {

@@ -1,7 +1,7 @@
 @description('Key Vault module skeleton')
 param location string
 param env string = 'dev'
-param vaultName string = 'naughtychatskv${uniqueString(resourceGroup().id)}'
+param vaultName string = toLower('nchkv${substring(uniqueString(resourceGroup().id), 0, 6)}')
 
 resource keyVault 'Microsoft.KeyVault/vaults@2021-06-01-preview' = {
   name: vaultName

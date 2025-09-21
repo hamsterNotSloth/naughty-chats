@@ -1,7 +1,8 @@
 FROM python:3.11-slim
-WORKDIR /app
-COPY backend/requirements.txt /app/requirements.txt
-RUN python -m pip install --upgrade pip && pip install -r /app/requirements.txt
-COPY backend /app
+WORKDIR /src
+# copy repo into container so package path includes 'backend' directory
+COPY . /src
+RUN python -m pip install --upgrade pip && pip install -r /src/backend/requirements.txt
 ENV PYTHONUNBUFFERED=1
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8080"]
+# run the app as a package so relative imports work (backend.app uses relative imports)
+CMD ["uvicorn", "backend.app:app", "--host", "0.0.0.0", "--port", "8080"]
