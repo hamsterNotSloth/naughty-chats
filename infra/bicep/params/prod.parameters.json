@@ -3,16 +3,16 @@
   "contentVersion": "1.0.0.0",
   "parameters": {
     "location": {
-      "value": "eastus"
+      "value": "East US"
     },
     "environment": {
-      "value": "dev"
+      "value": "prod"
     },
     "appImage": {
       "value": ""
     },
     "customDomain": {
-      "value": ""
+      "value": "api.naughtychats.com"
     }
   }
 }

@@ -1,5 +1,18 @@
 .DS_Store
 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.pytest_cache/
+
 # Dependencies
 webapp/node_modules/
 webapp/.next/
@@ -11,6 +24,9 @@ webapp/dist/
 
 # Environment variables
 webapp/.env*
+.env
+.env.local
+.env.*.local
 
 # IDE files
 .vscode/
