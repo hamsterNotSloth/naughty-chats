@@ -13,6 +13,10 @@ from . import ledger as ledger_module
 from .api import auth_routes
 from .api import characters as characters_router
 from .api import chat as chat_router
+from .api import gems as gems_router
+from .api import generate as generate_router
+from .api import affiliates as affiliates_router
+from .api import users as users_router
 
 app = FastAPI(title="naughty-chats-backend")
 
@@ -31,6 +35,10 @@ app.add_middleware(
 app.include_router(auth_routes.router)
 app.include_router(characters_router.router)
 app.include_router(chat_router.router)
+app.include_router(gems_router.router)
+app.include_router(generate_router.router)
+app.include_router(affiliates_router.router)
+app.include_router(users_router.router)
 
 @app.get("/")
 def root():
